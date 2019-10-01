@@ -4,11 +4,11 @@ This model is designed to help just released apps to deal with a cold start. It 
 ## Set up for Linux/macOS machine
 1. Clone repository:
 ```console
-	$ git clone https://github.com/egorkrash/SiameseNetwork.git
+$ git clone https://github.com/egorkrash/SiameseNetwork.git
 ```
 2. Install requirements via pip:
 ```console
-	$  pip install -r requirements.txt
+$ pip install -r requirements.txt
 ```
 	
 Now you're ready to use!

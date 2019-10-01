@@ -8,11 +8,11 @@ This model is designed to help just released apps to deal with a cold start. It 
 	$  pip install -r requirements.txt
 	
 Now you're ready to use!
-Run the following command to get a detailed description for each parameter:
+Run the following command to get a detailed description for each parameter:<br/>
 $ python run_model.py --help
 
 ## Make predictions
-Put some text description into testdesc.txt and run this command:
+Put some text description into testdesc.txt and run this command:<br/>
 $ python make_predictions.py
 
 Predictions will be saved in testpreds.txt

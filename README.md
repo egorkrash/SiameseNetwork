@@ -18,7 +18,7 @@ $ python make_predictions.py
 Predictions will be saved in testpreds.txt
 Notice! In this case model loads from './weights/params_wval_9.pt'
 
-Equivalently you can run model with your custom checkpoint and a new bank of possible queries as follows:
+Equivalently you can run model with your custom checkpoint and a new bank of possible queries as follows:<br/>
 $ python run_model.py --make-predictions --load-model --checkpoint-path 'path to saved weights'
 
 Thus, you can change the bank_queries.txt and the model will take into account new queries when making predictions

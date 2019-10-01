@@ -1,5 +1,5 @@
 # SiameseNetwork
-This model is designed to help just released apps to deal with a cold start. It uses app description to predict a set of queries which may be used when searching it. 
+This model is designed to help just released apps to deal with a cold start. It uses app description to predict a set of queries which may be used when searching that certain app. 
 # Usage
 ## Set up for Linux/macOS machine
 1. Clone repository:<br/>

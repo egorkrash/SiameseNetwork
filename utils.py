@@ -1,5 +1,6 @@
 from __future__ import print_function
 import re
+import pickle as pkl
 import hashlib
 import pymorphy2
 import numpy as np
@@ -100,7 +101,8 @@ def preprocess_keywords(arr, lemmatizer, stop_words):
             lemmatize_words.append(lemmatize_word)
         arr[i] = ' '.join(lemmatize_words)
 
-    return list(set(arr))
+    unique_queries, mask = np.unique(arr, return_index=True)
+    return unique_queries[1:], mask[1:]
 
 
 def calculate_intersection(keywords_1, keywords_2):
@@ -209,7 +211,7 @@ def make_pairs4prediction(text, queries):
 def checksum_match():
     # calculate hash for current bank
     hasher = hashlib.md5()
-    with open('bank_queries.txt', 'rb', encoding='utf-8') as f:
+    with open('bank_queries.txt', 'rb') as f:
         buf = f.read()
         hasher.update(buf)
     md5hash = hasher.hexdigest()
@@ -229,9 +231,14 @@ def update_queries():
 
     # preprocess queries
     stop_words = ['бесплатно', 'скачать', 'на русском', 'онлайн', 'русский']
-    queries_preprocessed = preprocess_keywords(queries, morph, stop_words)
+    queries_preprocessed, mask = preprocess_keywords(queries, morph, stop_words)
     # save them
-    np.save('data/all_keywords_keys.npy', queries_preprocessed[1:], allow_pickle=True)
+    np.save('data/all_keywords_keys.npy', queries_preprocessed, allow_pickle=True)
+    pkl.dump(mask, open('data/mask_queries.pkl', 'wb'))
+
+
+def calculate_queries_encodings(model, queries):
+    pass
 
 
 def pad_sequence(array):

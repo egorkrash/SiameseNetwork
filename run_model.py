@@ -90,7 +90,6 @@ def test(net, test_data, batch_size, device, shuffle=False, portion=None):
 
 
 def predict(net, description, device, batch_size=512, top_n=300):
-    print('Making predictions...')
     context_word_idx, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
     # preprocess description
     text = text2canonicals(description)
@@ -120,6 +119,7 @@ def predict(net, description, device, batch_size=512, top_n=300):
     # set model in evaluation mode
     net.eval()
     # make predictions
+    print('Making predictions...')
     for sample in generator:
         # unpack sample
         context, clen, q_cand, q_candlen = sample
@@ -272,6 +272,7 @@ def main():
         with open('testpreds.txt', 'w', encoding='utf-8') as f:
             for pred in predictions:
                 f.write(str(pred) + '\n')
+        print('Predictions were saved in testpreds.txt')
 
 
 if __name__ == "__main__":

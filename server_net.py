@@ -29,10 +29,19 @@ class Model(object):
 
         # load dicts
         self.context_word_idx, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
-        self.query_idx_word = dict(zip(query_word_idx.values(), query_word_idx.keys()))
+        # self.query_idx_word = dict(zip(query_word_idx.values(), query_word_idx.keys()))
+
+        mask = pkl.load(open('data/mask_queries.pkl', 'rb'))
+        with open('bank_queries.txt', 'r', encoding='utf-8') as f:
+            # load all queries in memory
+            self.bank_queries = list(map(lambda x: x.strip('\n'), f.readlines()))
+            self.bank_queries = [self.bank_queries[x] for x in mask]
+
         # load preprocessed bank of queries
         self.all_queries = np.load('data/all_keywords_keys.npy')
         self.all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), self.all_queries))
+
+        assert len(self.all_queries) == len(self.bank_queries)
         assert (np.array(list(map(len, self.all_queries))) == 0).sum() == 0, \
             'each query must contain at least 4 symbols'
 
@@ -45,6 +54,7 @@ class Model(object):
         # make pairs (text, query) to feed to the network
         data4prediction = make_pairs4prediction(text, self.all_queries)
         # initialize generator
+        del self.all_queries  # to free some memory
         generator = iterate_minibatches(data4prediction, 256,
                                         self.device, shuffle=False, train=False)
         predictions = []
@@ -61,8 +71,11 @@ class Model(object):
         # sort them
         sorted_predictions = sorted(zip(predictions, range(len(predictions))),
                                     reverse=True)
-        q4predictions = self.all_queries[:len(predictions)]
+
+        # q4predictions = self.all_queries[:len(predictions)]
+        q4predictions = self.bank_queries[:len(predictions)]
         inds = list(map(lambda x: x[1], sorted_predictions))
         # select top N predictions and return
         qselected = [q4predictions[x] for x in inds]
-        return list(map(lambda x: ' '.join(list(map(lambda y: self.query_idx_word.get(y), x))), qselected))[:top_n]
+        # list(map(lambda x: ' '.join(list(map(lambda y: self.query_idx_word.get(y), x))), qselected))[:top_n]
+        return qselected[:top_n]

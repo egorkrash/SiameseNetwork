@@ -138,7 +138,7 @@ def get_vocab(texts):
 
 
 def get_queries_vocab(queries):
-    return Counter([word for qs in queries for qury in qs for word in qury]).keys()
+    return Counter([word for qs in queries for query in qs for word in query]).keys()
 
 
 def text_to_idx(text, word_idx):
@@ -252,7 +252,8 @@ def pad_sequence(array):
     return matrix
 
 
-def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True):
+def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True, use_query_encodings=True):
+
     if shuffle:
         # shuffle indices
         indices = np.arange(len(inputs))

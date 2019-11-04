@@ -2,12 +2,12 @@ import torch
 from torch import nn
 
 
-class SiameseNetwork(nn.Module):
+class KernelSiameseNetwork(nn.Module):
     """
     New (second) version of Siamese network which supports semantic kernels.
     """
     def __init__(self, context_encoder, context_dim, query_dim):
-        super(SiameseNetwork, self).__init__()
+        super(KernelSiameseNetwork, self).__init__()
         self.context_encoder = context_encoder
 
         # siamese network layers
@@ -34,9 +34,9 @@ class SiameseNetwork(nn.Module):
             return score_pos
 
 
-class Encoder(nn.Module):
+class QueryEncoder(nn.Module):
     def __init__(self, emb_matrix, hidden_size=64):
-        super(Encoder, self).__init__()
+        super(QueryEncoder, self).__init__()
 
         self.embedding, num_embeddings, embedding_dim = self.create_emb_layer(emb_matrix, True)
         self.hidden_size = hidden_size
@@ -64,9 +64,9 @@ class Encoder(nn.Module):
 
 
 class ContextEncoder(nn.Module):
-    def __init__(self):
+    def __init__(self, emb_matrix, hidden_size=64):
         super(ContextEncoder, self).__init__()
         pass
 
     def forward(self, inputs):
-        pass
+        return torch.randn((100, 100))

@@ -20,7 +20,7 @@ class SiameseNetwork(nn.Module):
         # take both queries while training and only one while testing to assign a score
         # (second input just ignored if train=False)
         context_repr = self.context_encoder(context, clens)
-        siamese_inp_pos = torch.cat([query_pos_repr context_repr], dim=-1)
+        siamese_inp_pos = torch.cat([query_pos_repr, context_repr], dim=-1)
         score_pos = self.linear_2(self.relu(self.linear_1(self.dropout(siamese_inp_pos))))
         # in testing phase model takes only text and query
         # (to assign a score "how good is the given query in the context of given text")

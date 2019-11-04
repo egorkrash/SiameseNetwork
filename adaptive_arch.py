@@ -62,6 +62,7 @@ class Encoder(nn.Module):
         output = torch.cat([hn[0], hn[1]], dim=-1)
         return output
 
+
 class ContextEncoder(nn.Module):
     def __init__(self):
         super(ContextEncoder, self).__init__()

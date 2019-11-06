@@ -270,6 +270,17 @@ def pad_sequence(array):
     return matrix
 
 
+def iterate_encoding_minibatches(inputs, batchsize, device):
+    # inputs are pairs (vector of words indexes, query tensor)
+    for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
+        excerpt = slice(start_idx, start_idx + batchsize)
+        batch = inputs[excerpt]
+        context, query_repr = zip(*batch)
+        clen = torch.tensor(list(map(len, context)), dtype=torch.int32, device=device)
+        context = torch.tensor(pad_sequence(context), dtype=torch.long, device=device)
+        yield context, clen, query_repr
+
+
 def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True, use_query_encodings=True):
     # TODO load encodings and use them
     if shuffle:

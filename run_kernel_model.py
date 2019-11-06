@@ -19,7 +19,7 @@ def cost_function(x):
 def train(net, query_enc, train_data, test_data, device, args):
     optimizer = optim.Adam(list(net.parameters()) + list(query_enc.parameters()), lr=args.lr)  # weight_decay=0.0005)
     print('Start training...')
-    # set model in training mode
+    # set models in training mode
     net.train()
     query_enc.train()
     for epoch in range(args.epochs):
@@ -64,7 +64,7 @@ def train(net, query_enc, train_data, test_data, device, args):
     print('Finished Training')
 
 
-def test(net, test_data, batch_size, device, shuffle=False, portion=None):
+def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=None, use_query_encodings=True):
     if portion is None:
         portion = batch_size * 200
     # make a random sample from test data of size portion
@@ -73,17 +73,25 @@ def test(net, test_data, batch_size, device, shuffle=False, portion=None):
     np.random.shuffle(inds)
     test_data = [test_data[x] for x in inds[:portion]]
     print('Testing on {} samples'.format(len(test_data)))
-    generator = iterate_minibatches(test_data, batch_size, device, shuffle=shuffle)
+    generator = iterate_minibatches(test_data, batch_size, device, shuffle=shuffle,
+                                    use_query_encodings=use_query_encodings)
     cnt = 0
     running_loss = 0
     # set model in evaluation mode
     net.eval()
+    query_enc.eval()
     with torch.no_grad():
         for sample in generator:
-            # parse the sample
-            context, clen, q_pos, qposlen, q_neg, qneglen = sample
-            # get predictions
-            outputs = net(context, clen, q_pos, qposlen, q_neg, qneglen)
+            if use_query_encodings:
+                context, clen, query_pos_repr, query_neg_repr = sample
+                outputs = net(context, clen, query_pos_repr, query_neg_repr)
+            else:
+                # parse the sample
+                context, clen, q_pos, qposlen, q_neg, qneglen = sample
+                # get predictions
+                query_pos_repr = query_enc(q_pos, qposlen)
+                query_neg_repr = query_enc(q_neg, qneglen)
+                outputs = net(context, clen, query_pos_repr, query_neg_repr)
             # calculate loss
             loss = cost_function(outputs)
             running_loss += loss.item()
@@ -106,7 +114,7 @@ def predict(net, description, device, batch_size=512, top_n=300):
             f.write(md5hash)
 
     # load preprocessed bank of queries
-    all_queries = np.load('data/all_keywords_keys.npy')
+    all_queries = np.load('data/all_keywords_keys.npy')  # TODO: put here matching tensors
     # convert to indices
     text = text_to_idx(text, context_word_idx)
     all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), all_queries))

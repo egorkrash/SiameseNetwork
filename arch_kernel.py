@@ -4,7 +4,7 @@ from torch import nn
 
 class KernelSiameseNetwork(nn.Module):
     """
-    New (second) version of Siamese network which supports semantic kernels.
+    New (second) version of Siamese network which supports semantic kernels
     """
     def __init__(self, context_encoder, context_dim, query_dim):
         super(KernelSiameseNetwork, self).__init__()
@@ -66,7 +66,19 @@ class QueryEncoder(nn.Module):
 class ContextEncoder(nn.Module):
     def __init__(self, emb_matrix, hidden_size=64):
         super(ContextEncoder, self).__init__()
-        pass
+        self.embedding, num_embeddings, embedding_dim = self.create_emb_layer(emb_matrix, True)
+        self.linear = nn.Linear(embedding_dim, hidden_size * 2)
+        self.leaky_relu = nn.LeakyReLU()
+
+    @staticmethod
+    def create_emb_layer(weights_matrix, non_trainable=False):
+        num_embeddings, embedding_dim = weights_matrix.shape
+        emb_layer = nn.Embedding(num_embeddings, embedding_dim)
+        emb_layer.load_state_dict({'weight': weights_matrix})
+        if non_trainable:
+            emb_layer.weight.requires_grad = False
+
+        return emb_layer, num_embeddings, embedding_dim
 
     def forward(self, inputs):
-        return torch.randn((100, 100))
+        return self.leaky_relu(self.linear(torch.mean(self.embedding(inputs), dim=-1)))

@@ -114,15 +114,17 @@ def predict(net, description, device, batch_size=512, top_n=300):
             f.write(md5hash)
 
     # load preprocessed bank of queries
-    all_queries = np.load('data/all_keywords_keys.npy')  # TODO: put here matching tensors
+    #all_queries = np.load('data/all_keywords_keys.npy')  # TODO: put here matching tensors
+    all_queries = np.load('data/queries_encodings.npy', allow_pickle=True)
     # convert to indices
-    text = text_to_idx(text, context_word_idx)
-    all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), all_queries))
+    # text = text_to_idx(text, context_word_idx)
+    # all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), all_queries))
     # make pairs (text, query) to feed to the network
     data4prediction = make_pairs4prediction(text, all_queries)
     # filter zero length samples
     data4prediction = filter_zero_length(data4prediction, name='eval', train=False, verbose=False)
     # initialize generator
+    print('Reached generator initialiation!')
     generator = iterate_minibatches(data4prediction, batch_size,
                                     device, shuffle=False, train=False, use_query_encodings=True)
     predictions = []

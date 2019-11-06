@@ -252,7 +252,7 @@ def calculate_queries_encodings(model, device, queries, batch_size=256):
         queries_tensor = torch.tensor(pad_sequence(batch), dtype=torch.long, device=device)
         queries_len = torch.tensor(list(map(len, queries_tensor)), dtype=torch.int32, device=device)
         queries_repr = model(queries_tensor, queries_len)
-        queries_repr = queries_repr.cpu()
+        queries_repr = queries_repr.detach().cpu()
         queries_encodings.append(queries_repr)
     queries_encodings = np.array([x for btch in queries_encodings for x in btch])
     # save tensors for queries

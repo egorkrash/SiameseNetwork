@@ -232,7 +232,6 @@ def update_queries(query_enc=None, device=None):
     # preprocess queries
     stop_words = ['бесплатно', 'скачать', 'на русском', 'онлайн', 'русский']
     queries_preprocessed, mask = preprocess_keywords(queries, morph, stop_words)
-    print(len(queries_preprocessed), len(queries))
     # save them
     np.save('data/all_keywords_keys.npy', queries_preprocessed, allow_pickle=True)
     pkl.dump(mask, open('data/mask_queries.pkl', 'wb'))
@@ -276,13 +275,14 @@ def iterate_encoding_minibatches(inputs, batchsize, device):
         excerpt = slice(start_idx, start_idx + batchsize)
         batch = inputs[excerpt]
         context, query_repr = zip(*batch)
+        query_repr = torch.stack(query_repr)
+        query_repr = query_repr.to(device)
         clen = torch.tensor(list(map(len, context)), dtype=torch.int32, device=device)
         context = torch.tensor(pad_sequence(context), dtype=torch.long, device=device)
         yield context, clen, query_repr
 
 
 def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True, use_query_encodings=True):
-    # TODO load encodings and use them
     if shuffle:
         # shuffle indices
         indices = np.arange(len(inputs))

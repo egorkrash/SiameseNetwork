@@ -220,7 +220,7 @@ def main():
         is_trained = True
 
     # send it to gpu
-    net.to(device)
+    net = net.to(device)
 
     if args.train or args.eval:
         # load preprocessed texts and queries

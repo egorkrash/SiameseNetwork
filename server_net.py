@@ -26,7 +26,6 @@ class Model(object):
         self.net = load_model(self.net, checkpoint_path, self.device)
         # send it to gpu
         self.net.to(self.device)
-
         # load dicts
         self.context_word_idx, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
         # self.query_idx_word = dict(zip(query_word_idx.values(), query_word_idx.keys()))

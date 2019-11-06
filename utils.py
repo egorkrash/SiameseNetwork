@@ -232,32 +232,31 @@ def update_queries(query_enc=None, device=None):
     # preprocess queries
     stop_words = ['бесплатно', 'скачать', 'на русском', 'онлайн', 'русский']
     queries_preprocessed, mask = preprocess_keywords(queries, morph, stop_words)
-    print(len(queries_preprocessed))
+    print(len(queries_preprocessed), len(queries))
     # save them
     np.save('data/all_keywords_keys.npy', queries_preprocessed, allow_pickle=True)
     pkl.dump(mask, open('data/mask_queries.pkl', 'wb'))
-    # TODO save tensors corresponding to queries (run query_enc here)
     if query_enc is not None:
         assert device is not None
-        # save tensors for queries
-        _, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
-        all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), queries_preprocessed))
-
-        batch_size = 256
-        queries_encodings = []
-        for start_idx in range(0, len(all_queries) - batch_size + 1, batch_size):
-            excerpt = slice(start_idx, start_idx + batch_size)
-            batch = all_queries[excerpt]
-            queries_tensor = torch.tensor(pad_sequence(batch), dtype=torch.long, device=device)
-            queries_len = torch.tensor(list(map(len, queries_tensor)), dtype=torch.int32, device=device)
-            queries_repr = query_enc(queries_tensor, queries_len)
-            queries_encodings.append(queries_repr)
-        queries_encodings = np.array([x for btch in queries_encodings for x in btch])
-        np.save('data/queries_encodings.npy', queries_encodings, allow_pickle=True)
+        calculate_queries_encodings(query_enc, device, queries_preprocessed)
 
 
-def calculate_queries_encodings(model, device, queries):
-    pass
+def calculate_queries_encodings(model, device, queries, batch_size=256):
+    _, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
+    all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), queries))
+
+    queries_encodings = []
+    for start_idx in range(0, len(all_queries) - batch_size + 1, batch_size):
+        excerpt = slice(start_idx, start_idx + batch_size)
+        batch = all_queries[excerpt]
+        queries_tensor = torch.tensor(pad_sequence(batch), dtype=torch.long, device=device)
+        queries_len = torch.tensor(list(map(len, queries_tensor)), dtype=torch.int32, device=device)
+        queries_repr = model(queries_tensor, queries_len)
+        queries_repr = queries_repr.cpu()
+        queries_encodings.append(queries_repr)
+    queries_encodings = np.array([x for btch in queries_encodings for x in btch])
+    # save tensors for queries
+    np.save('data/queries_encodings.npy', queries_encodings, allow_pickle=True)
 
 
 def pad_sequence(array):

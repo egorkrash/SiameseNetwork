@@ -124,7 +124,7 @@ def predict(net, description, device, batch_size=512, top_n=300):
     data4prediction = filter_zero_length(data4prediction, name='eval', train=False, verbose=False)
     # initialize generator
     generator = iterate_minibatches(data4prediction, batch_size,
-                                    device, shuffle=False, train=False)
+                                    device, shuffle=False, train=False, use_query_encodings=True)
     predictions = []
     # set model in evaluation mode
     net.eval()
@@ -132,8 +132,8 @@ def predict(net, description, device, batch_size=512, top_n=300):
     print('Making predictions...')
     for sample in generator:
         # unpack sample
-        context, clen, q_cand, q_candlen = sample
-        outputs = net(context, clen, q_cand, q_candlen, train=False)
+        context, clen, query_repr = sample
+        outputs = net(context, clen, query_repr, train=False)
         outputs = list(map(lambda x: x[0], outputs.tolist()))
         predictions.extend(outputs)
 
@@ -230,8 +230,8 @@ def main():
         is_trained = True
 
     # send it to gpu
-    query_enc.to(device)
-    net.to(device)
+    query_enc = query_enc.to(device)
+    net = net.to(device)
 
     if args.train or args.eval:
         # load preprocessed texts and queries

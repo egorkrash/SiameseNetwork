@@ -282,7 +282,7 @@ def iterate_encoding_minibatches(inputs, batchsize, device):
         yield context, clen, query_repr
 
 
-def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True, use_query_encodings=True):
+def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True):
     if shuffle:
         # shuffle indices
         indices = np.arange(len(inputs))

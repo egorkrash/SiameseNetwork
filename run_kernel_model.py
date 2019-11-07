@@ -51,7 +51,7 @@ def train(net, query_enc, train_data, test_data, device, args):
                 running_loss = 0.0
 
             if i % args.val_interval == args.val_interval - 1:
-                test(net, test_data, args.test_batch_size, device, args.shuffle)
+                test(net, query_enc, test_data, args.test_batch_size, device, args.shuffle)
                 net.train()
             i += 1
 
@@ -64,7 +64,7 @@ def train(net, query_enc, train_data, test_data, device, args):
     print('Finished Training')
 
 
-def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=None, use_query_encodings=True):
+def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=None):
     if portion is None:
         portion = batch_size * 200
     # make a random sample from test data of size portion
@@ -73,8 +73,7 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
     np.random.shuffle(inds)
     test_data = [test_data[x] for x in inds[:portion]]
     print('Testing on {} samples'.format(len(test_data)))
-    generator = iterate_minibatches(test_data, batch_size, device, shuffle=shuffle,
-                                    use_query_encodings=use_query_encodings)
+    generator = iterate_minibatches(test_data, batch_size, device, shuffle=shuffle)
     cnt = 0
     running_loss = 0
     # set model in evaluation mode
@@ -82,16 +81,12 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
     query_enc.eval()
     with torch.no_grad():
         for sample in generator:
-            if use_query_encodings:
-                context, clen, query_pos_repr, query_neg_repr = sample
-                outputs = net(context, clen, query_pos_repr, query_neg_repr)
-            else:
-                # parse the sample
-                context, clen, q_pos, qposlen, q_neg, qneglen = sample
-                # get predictions
-                query_pos_repr = query_enc(q_pos, qposlen)
-                query_neg_repr = query_enc(q_neg, qneglen)
-                outputs = net(context, clen, query_pos_repr, query_neg_repr)
+            # parse the sample
+            context, clen, q_pos, qposlen, q_neg, qneglen = sample
+            # get predictions
+            query_pos_repr = query_enc(q_pos, qposlen)
+            query_neg_repr = query_enc(q_neg, qneglen)
+            outputs = net(context, clen, query_pos_repr, query_neg_repr)
             # calculate loss
             loss = cost_function(outputs)
             running_loss += loss.item()
@@ -274,7 +269,7 @@ def main():
             test(net, test_data, args.test_batch_size, device, portion=len(test_data))
 
     if args.make_prediction:
-        assert is_trained, 'Model have to be trained or loaded before making predictions'
+#        assert is_trained, 'Model have to be trained or loaded before making predictions'
         with open(args.prediction_data_path, 'r', encoding='utf-8') as f:
             description = f.read().strip()
         predictions = predict(net, description, device)

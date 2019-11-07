@@ -34,8 +34,7 @@ class Model(object):
             self.bank_queries = [self.bank_queries[x] for x in mask]
 
         # load preprocessed bank of queries
-        self.all_queries = np.load('data/all_keywords_keys.npy')
-        self.all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), self.all_queries))
+        self.all_queries = np.load('data/queries_encodings.npy', allow_pickle=True)
 
         assert len(self.all_queries) == len(self.bank_queries)
         assert (np.array(list(map(len, self.all_queries))) == 0).sum() == 0, \

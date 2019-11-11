@@ -91,6 +91,10 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
             loss = cost_function(outputs)
             running_loss += loss.item()
             cnt += 1
+
+    # set models back to training mode
+    net.train()
+    query_enc.train()
     print('Test loss %.3f' % (running_loss / cnt))
 
 

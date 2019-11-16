@@ -232,11 +232,13 @@ def main():
         texts = np.load('data/all_descriptions_keys.npy')
         queries = np.load('data/matched_keywords.npy')
         queries = list(map(lambda x: list(map(lambda y: y.split(), x)), queries))
+
         # load dicts for mapping words to indices
         context_word_idx, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
         # map to indices
         samples = list(map(lambda x: text_to_idx(x, context_word_idx), texts))
         queries = list(map(lambda x: list(map(lambda y: text_to_idx(y, query_word_idx), x)), queries))
+
         # split to train and test sets of apps
         train_samples, test_samples, train_queries, test_queries = train_test_split(samples, queries,
                                                                                     test_size=0.05,

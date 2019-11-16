@@ -27,15 +27,20 @@ def train(net, query_enc, train_data, test_data, device, args):
         i = 0
         # initialize data generator
         generator = iterate_minibatches(train_data, args.batch_size, device=device, shuffle=args.shuffle,)
+
         for sample in generator:
             # parse the sample
-            context, clen, q_pos, qposlen, q_neg, qneglen = sample
+
+            context, q_pos, qposlen, q_neg, qneglen = sample
+
             # zero gradients
             optimizer.zero_grad()
             query_pos_repr = query_enc(q_pos, qposlen)
             query_neg_repr = query_enc(q_neg, qneglen)
             # get predictions (difference in scores)
-            outputs = net(context, clen, query_pos_repr, query_neg_repr)
+
+            outputs = net(context, query_pos_repr, query_neg_repr)
+
             # calculate loss
             loss = cost_function(outputs)
             # backpropagate
@@ -82,11 +87,11 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
     with torch.no_grad():
         for sample in generator:
             # parse the sample
-            context, clen, q_pos, qposlen, q_neg, qneglen = sample
+            context, q_pos, qposlen, q_neg, qneglen = sample
             # get predictions
             query_pos_repr = query_enc(q_pos, qposlen)
             query_neg_repr = query_enc(q_neg, qneglen)
-            outputs = net(context, clen, query_pos_repr, query_neg_repr)
+            outputs = net(context, query_pos_repr, query_neg_repr)
             # calculate loss
             loss = cost_function(outputs)
             running_loss += loss.item()
@@ -98,10 +103,10 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
     print('Test loss %.3f' % (running_loss / cnt))
 
 
-def predict(net, description, device, batch_size=512, top_n=300):
+def predict(net, kernel, device, batch_size=512, top_n=300):
     context_word_idx, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
     # preprocess description
-    text = text2canonicals(description)
+    kernel_vector = get_kernel_vector(kernel)
     # check that bank of queries is not changed
     match, md5hash = checksum_match()
 
@@ -117,9 +122,8 @@ def predict(net, description, device, batch_size=512, top_n=300):
     all_queries = np.load('data/all_keywords_keys.npy')
     all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), all_queries))
 
-    text = text_to_idx(text, context_word_idx)
     # make pairs (text, query_tensor) to feed to the network
-    data4prediction = make_pairs4prediction(text, all_queries_encodings)
+    data4prediction = make_pairs4prediction(kernel_vector, all_queries_encodings)
     # initialize generator
     generator = iterate_encoding_minibatches(data4prediction, batch_size, device)
     predictions = []
@@ -176,7 +180,7 @@ def main():
     parser.add_argument('--shuffle', default=True,
                         help='shuffle batches while training (default True)')
 
-    parser.add_argument('--nneg-samples', type=int, default=10,
+    parser.add_argument('--nneg-samples', type=int, default=50,
                         help='number of negative samples for one positive (default 10)')
 
     parser.add_argument('--gpu', type=int, default=0, metavar='N',
@@ -185,7 +189,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 128)')
 
-    parser.add_argument('--test-batch-size', type=int, default=512, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
                         help='input batch size for testing (default: 512)')
 
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
@@ -209,16 +213,12 @@ def main():
     print("Using device: {}".format(device))
 
     # load embedding matrices
-    context_emb_matrix = np.load('data/context_emb_matr.npy')
     query_emb_matrix = np.load('data/query_emb_matr.npy')
     # send them to gpu
-    context_emb_matrix = torch.tensor(context_emb_matrix, dtype=torch.float32, device=device)
     query_emb_matrix = torch.tensor(query_emb_matrix, dtype=torch.float32, device=device)
 
-    # initialize encoders for texts and queries
-    context_enc = QueryEncoder(context_emb_matrix)
-    # initialize network
     query_enc = QueryEncoder(query_emb_matrix)
+    context_enc = ContextEncoder()
     net = KernelSiameseNetwork(context_enc, 128, 128)
     # load from checkpoint
     if args.load_model:
@@ -237,14 +237,11 @@ def main():
         np.load = lambda *a, **k: np_load_old(*a, allow_pickle=True, **k)
         print('Loading data and forming a training set...')
         # call load_data with allow_pickle implicitly set to true
-        texts = np.load('data/all_descriptions_keys.npy')
+
         queries = np.load('data/matched_keywords.npy')
-        queries = list(map(lambda x: list(map(lambda y: y.split(), x)), queries))
-        # load dicts for mapping words to indices
-        context_word_idx, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
+        samples = range(len(queries))
+        assert len(samples) == len(queries)
         # map to indices
-        samples = list(map(lambda x: text_to_idx(x, context_word_idx), texts))
-        queries = list(map(lambda x: list(map(lambda y: text_to_idx(y, query_word_idx), x)), queries))
         # split to train and test sets of apps
         train_samples, test_samples, train_queries, test_queries = train_test_split(samples, queries,
                                                                                     test_size=0.05,

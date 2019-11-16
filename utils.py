@@ -152,13 +152,13 @@ def filter_zero_length(data, name='train', train=True, verbose=True):
     while i < len(data):
         if train:
             t, q, _q = data[i]
-            if len(t) == 0 or len(q) == 0 or len(_q) == 0:
+            if len(q) == 0 or len(_q) == 0:
                 data.pop(i)
                 cnt += 1
                 i -= 1
         else:
             t, q = data[i]
-            if len(t) == 0 or len(q) == 0:
+            if len(q) == 0:
                 data.pop(i)
                 cnt += 1
                 i -= 1
@@ -283,6 +283,7 @@ def iterate_encoding_minibatches(inputs, batchsize, device):
 
 
 def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True):
+    vector_dict = pkl.load(open('data/vectors_dict.pkl', 'rb'))
     if shuffle:
         # shuffle indices
         indices = np.arange(len(inputs))
@@ -301,17 +302,17 @@ def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True):
         else:
             context, q_pos = zip(*batch)
         # calculate lengths which will be used in rnn
-        clen = torch.tensor(list(map(len, context)), dtype=torch.int32, device=device)
+        context = np.array([vector_dict[x] for x in context])
         qposlen = torch.tensor(list(map(len, q_pos)), dtype=torch.int32, device=device)
-        context = torch.tensor(pad_sequence(context), dtype=torch.long, device=device)
+        context = torch.tensor(context, dtype=torch.float32, device=device)
         q_pos = torch.tensor(pad_sequence(q_pos), dtype=torch.long, device=device)
 
         if train:
             qneglen = torch.tensor(list(map(len, q_neg)), dtype=torch.int32, device=device)
             q_neg = torch.tensor(pad_sequence(q_neg), dtype=torch.long, device=device)
-            yield context, clen, q_pos, qposlen, q_neg, qneglen
+            yield context, q_pos, qposlen, q_neg, qneglen
         else:
-            yield context, clen, q_pos, qposlen
+            yield context, q_pos, qposlen
 
 
 def save_model(state_dict, path):

@@ -9,6 +9,7 @@ from sklearn.model_selection import train_test_split
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
+import pandas as pd
 
 
 # define our loss
@@ -38,9 +39,7 @@ def train(net, query_enc, train_data, test_data, device, args):
             query_pos_repr = query_enc(q_pos, qposlen)
             query_neg_repr = query_enc(q_neg, qneglen)
             # get predictions (difference in scores)
-
             outputs = net(context, query_pos_repr, query_neg_repr)
-
             # calculate loss
             loss = cost_function(outputs)
             # backpropagate
@@ -75,8 +74,9 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
     # make a random sample from test data of size portion
     assert portion <= len(test_data)
     inds = np.arange(len(test_data))
-    np.random.shuffle(inds)
-    test_data = [test_data[x] for x in inds[:portion]]
+    inds = np.random.choice(inds, portion, replace=False)
+
+    test_data = [test_data[x] for x in inds]
     print('Testing on {} samples'.format(len(test_data)))
     generator = iterate_minibatches(test_data, batch_size, device, shuffle=shuffle)
     cnt = 0
@@ -103,29 +103,31 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
     print('Test loss %.3f' % (running_loss / cnt))
 
 
-def predict(net, kernel, device, batch_size=512, top_n=300):
-    context_word_idx, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
+def predict(net, query_enc, kernel, device, name='Переводчик', category='Инструменты', batch_size=512, top_n=300):
+    mask = pkl.load(open('data/mask_queries.pkl', 'rb'))
+    with open('bank_queries.txt', 'r', encoding='utf-8') as f:
+        # load all queries in memory
+        bank_queries = list(map(lambda x: x.strip('\n'), f.readlines()))
+        bank_queries = [bank_queries[x] for x in mask]
     # preprocess description
-    kernel_vector = get_kernel_vector(kernel)
-    # check that bank of queries is not changed
+    kernel_vector = process_new_input(name, kernel, category)
+    # check that bank of queries is[2, 8], [2,  not changed
     match, md5hash = checksum_match()
 
     if not match:
         # update data/all_keywords_keys.npy
-        update_queries()
+        update_queries()#query_enc, device)
         # rewrite new hash
         with open('data/queries_md5hash', 'w', encoding='utf-8') as f:
             f.write(md5hash)
 
     # load preprocessed bank of queries
-    all_queries_encodings = np.load('data/queries_encodings.npy', allow_pickle=True)
-    all_queries = np.load('data/all_keywords_keys.npy')
-    all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), all_queries))
-
+    #all_queries_encodings = np.load('data/queries_encodings.npy', allow_pickle=True)
+    all_queries = np.load('data/all_keywords_keys.npy', allow_pickle=True)
     # make pairs (text, query_tensor) to feed to the network
-    data4prediction = make_pairs4prediction(kernel_vector, all_queries_encodings)
+    data4prediction = make_pairs4prediction(kernel_vector, all_queries)
     # initialize generator
-    generator = iterate_encoding_minibatches(data4prediction, batch_size, device)
+    generator = iterate_minibatches(data4prediction, batch_size, device, shuffle=False, train=False)
     predictions = []
     # set model in evaluation mode
     net.eval()
@@ -133,20 +135,20 @@ def predict(net, kernel, device, batch_size=512, top_n=300):
     print('Making predictions...')
     for sample in generator:
         # unpack sample
-        context, clen, query_repr = sample
-        outputs = net(context, clen, query_repr, train=False)
+        context, query_pos, qposlen = sample
+        query_repr = query_enc(query_pos, qposlen)
+        outputs = net(context, query_repr, train=False)
         outputs = list(map(lambda x: x[0], outputs.tolist()))
         predictions.extend(outputs)
 
     # sort them
     sorted_predictions = sorted(zip(predictions, range(len(predictions))),
                                 reverse=True)
-    q4predictions = all_queries[:len(predictions)]
+    q4predictions = bank_queries[:len(predictions)]
     inds = list(map(lambda x: x[1], sorted_predictions))
     # select top N predictions and return
     qselected = [q4predictions[x] for x in inds]
-    query_idx_word = dict(zip(query_word_idx.values(), query_word_idx.keys()))
-    return list(map(lambda x: ' '.join(list(map(lambda y: query_idx_word.get(y), x))), qselected))[:top_n]
+    return qselected[:top_n]
 
 
 def main():
@@ -156,7 +158,7 @@ def main():
     parser.add_argument('--save-model', default=True,
                         help='for saving the current model each "save-each" epochs')
 
-    parser.add_argument('--save-each', type=int, default=5, metavar='N',
+    parser.add_argument('--save-each', type=int, default=1, metavar='N',
                         help='number of epochs to wait before making checkpoint (default 5)')
 
     parser.add_argument('--load-model', action='store_true', default=False,
@@ -204,7 +206,7 @@ def main():
     parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                         help='how many batches to wait before logging training status (default 200)')
 
-    parser.add_argument('--val-interval', type=int, default=5000, metavar='N',
+    parser.add_argument('--val-interval', type=int, default=1000, metavar='N',
                         help='how many batches to wait before performing validation (default 5000)')
 
     args = parser.parse_args()
@@ -239,7 +241,7 @@ def main():
         # call load_data with allow_pickle implicitly set to true
 
         queries = np.load('data/matched_keywords.npy')
-        samples = range(len(queries))
+        samples = list(range(len(queries)))
         assert len(samples) == len(queries)
         # map to indices
         # split to train and test sets of apps
@@ -271,13 +273,25 @@ def main():
 
     if args.make_prediction:
 #        assert is_trained, 'Model have to be trained or loaded before making predictions'
-        with open(args.prediction_data_path, 'r', encoding='utf-8') as f:
-            description = f.read().strip()
-        predictions = predict(net, description, device)
-        with open('testpreds.txt', 'w', encoding='utf-8') as f:
-            for pred in predictions:
-                f.write(str(pred) + '\n')
-        print('Predictions were saved in testpreds.txt')
+        df = pd.read_csv('data/apps.csv').head(2)
+        df['Keywords'] = df['Keywords'].apply(lambda x: str(x).replace('|', ','))
+        kernels = df['kernel'].values
+        names = df['Name'].values
+        categories = df['Category'].values
+
+        predictions = []
+        for kernel, name, category in zip(kernels, names, categories):
+            prediction = predict(net, query_enc, kernel, device, name=name, category=category)
+            prediction = ','.join(prediction)
+            predictions.append(prediction)
+            print(prediction)
+
+        df['Prediction'] = predictions
+        # with open('testpreds.txt', 'w', encoding='utf-8') as f:
+        #     for pred in predictions:
+        #         f.write(str(pred) + '\n')
+        #print('Predictions were saved in testpreds.txt')
+        count_recall_at_ks(df, 'Keywords', 'Prediction').to_csv('pred.csv')
 
 
 if __name__ == "__main__":

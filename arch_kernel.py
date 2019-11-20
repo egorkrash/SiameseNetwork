@@ -12,8 +12,8 @@ class KernelSiameseNetwork(nn.Module):
         # siamese network layers
         self.dropout = nn.Dropout(0.5)
         self.linear_1 = nn.Linear(context_dim + query_dim, 1024)
-        self.linear_2 = nn.Linear(1024, 512)
-        self.linear_3 = nn.Linear(512, 1)
+        self.linear_2 = nn.Linear(1024, 128)
+        self.linear_3 = nn.Linear(128, 1)
         self.relu = nn.LeakyReLU()
 
     def forward(self, context, query_pos_repr, query_neg_repr=None, train=True):
@@ -21,15 +21,14 @@ class KernelSiameseNetwork(nn.Module):
         # (second input just ignored if train=False)
         context_repr = self.context_encoder(context)
         siamese_inp_pos = torch.cat([query_pos_repr, context_repr], dim=-1)
-        score_pos = self.linear_3(self.relu(self.linear_2(self.relu(self.linear_1(self.dropout(siamese_inp_pos))))))
+        score_pos = self.linear_3(self.relu(self.linear_2(self.relu(self.dropout(self.linear_1(siamese_inp_pos))))))
         # in testing phase model takes only text and query
         # (to assign a score "how good is the given query in the context of given text")
         if train:
             assert query_neg_repr is not None, "you have to provide a second input"
             siamese_inp_neg = torch.cat([query_neg_repr, context_repr], dim=-1)
-            score_neg = self.linear_3(self.relu(self.linear_2(self.relu(self.linear_1(self.dropout(siamese_inp_neg))))))
+            score_neg = self.linear_3(self.relu(self.linear_2(self.relu(self.dropout(self.linear_1(siamese_inp_neg))))))
             return score_pos - score_neg
-
         else:
             return score_pos
 
@@ -64,7 +63,7 @@ class QueryEncoder(nn.Module):
 
 
 class ContextEncoder(nn.Module):
-    def __init__(self, input_dim=1555, hidden_size=64):
+    def __init__(self, input_dim=1864, hidden_size=64):
         super(ContextEncoder, self).__init__()
         self.linear1 = nn.Linear(input_dim, 1024)
         self.linear2 = nn.Linear(1024, hidden_size * 2)

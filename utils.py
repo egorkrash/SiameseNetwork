@@ -7,12 +7,52 @@ import numpy as np
 import multiprocessing
 from collections import Counter
 from joblib import Parallel, delayed
-from tqdm import tqdm
 import torch
 import string
+from gensim.models.wrappers.fasttext import FastTextKeyedVectors
+from tqdm import tqdm
 
 # morph analyzer for text lemmatization
 morph = pymorphy2.MorphAnalyzer()
+fasttext = FastTextKeyedVectors.load('187/model.model')
+stop_words = ['бесплатно', 'скачать', 'на русском', 'онлайн', 'русский']
+
+
+def count_recall_at_ks(data, col_real, col_pred, ks=[5,20,50,100]):
+    """Compute recall@k for k in ks.
+    
+    data: pd.DataFrame of given data
+    col_real: column name with real keywords
+    col_pred: column name with predicted keywords
+    ks: iterable, all values of k to compute recall@k
+    
+    all the keywords should be separated with ','
+    """
+    
+    data[col_real] = data[col_real].apply(lambda x: x.split(','))
+    data[col_pred] = data[col_pred].apply(lambda x: x.split(','))
+    
+    data_matrix = data[[col_real, col_pred]].values
+    
+    res_dict = {k : [] for k in ks}
+    
+    for i in range(data_matrix.shape[0]):
+        real = data_matrix[i, 0]
+        pred = data_matrix[i, 1]
+        
+        for k in ks:
+            if k < len(real) and k < len(pred):
+                real_temp = set(real[:k])
+                pred_temp = set(pred[:k])
+                intersect = len(real_temp & pred_temp)
+                recall_at_k = intersect / k
+                res_dict[k].append(recall_at_k)
+            else:
+                res_dict[k].append(np.nan)
+    
+    for k, recalls in res_dict.items():
+        data['recall_at_{}'.format(k)] = recalls
+    return data
 
 
 # function for performing parallel computing on cpu
@@ -55,20 +95,23 @@ def get_words(text, filter_short_words=False):
         return re.findall(r'(?u)\w+', text)
 
 
-def text2canonicals(text, add_word=False, filter_short_words=True):
+def text2canonicals(text, add_word=False, filter_short_words=True, repeats=True):
     words = []
     for word in get_words(text, filter_short_words=filter_short_words):
         words.append(word2canonical(word.lower()))
         if add_word:
             words.append(word.lower())
-    return words
+    if not repeats:
+        return list(set(words))
+    else:
+        return words
 
 
 def remove_punct(s, translator):
     return s.translate(translator)
 
 
-def preprocess_keywords(arr, lemmatizer, stop_words):
+def preprocess_keywords(arr):
     """
     function that makes lemmatization and other preprocessings for given keywords
 
@@ -79,6 +122,7 @@ def preprocess_keywords(arr, lemmatizer, stop_words):
     return: list of all the unique keywords
     """
     # remove number
+    lemmatizer = morph
     pattern = '[0-9]'
     arr = [re.sub(pattern, '', i) for i in arr]
 
@@ -119,17 +163,18 @@ def calculate_intersection(keywords_1, keywords_2):
     return intersection / normalizer
 
 
-def build_weight_matrix(word2vec, target_vocab, emb_dim=300):
-    matrix_len = len(target_vocab)
+def build_weight_matrix(word2vec, vocab, emb_dim=300):
+    matrix_len = len(vocab) + 1 # 0 for zero vector and last for 
     weights_matrix = np.zeros((matrix_len, emb_dim))
     words_found = 0
 
-    for i, word in enumerate(target_vocab):
-        try:
-            weights_matrix[i] = word2vec.get_vector(word)  # word2vec[word]
+    for word, idx in vocab.items():
+        try: 
+            weights_matrix[idx] = word2vec.get_vector(word)#word2vec[word]
             words_found += 1
         except KeyError:
-            weights_matrix[i] = np.random.normal(scale=0.6, size=(emb_dim, ))
+            weights_matrix[idx] = np.zeros((emb_dim, ))
+    
     return weights_matrix
 
 
@@ -142,7 +187,7 @@ def get_queries_vocab(queries):
 
 
 def text_to_idx(text, word_idx):
-    return list(map(lambda x: word_idx.get(x) if word_idx.get(x) is not None else len(word_idx) + 1, text))
+    return list(map(lambda x: word_idx.get(x) if word_idx.get(x) is not None else 0,text))
 
 
 def filter_zero_length(data, name='train', train=True, verbose=True):
@@ -230,9 +275,11 @@ def update_queries(query_enc=None, device=None):
         queries = list(map(lambda x: x.strip('\n'), f.readlines()))
 
     # preprocess queries
-    stop_words = ['бесплатно', 'скачать', 'на русском', 'онлайн', 'русский']
-    queries_preprocessed, mask = preprocess_keywords(queries, morph, stop_words)
+    queries_preprocessed, mask = preprocess_keywords(queries)
     # save them
+    query_word_idx = pkl.load(open('data/query_word_idx.pkl', 'rb'))
+    queries_preprocessed = list(map(lambda x: text_to_idx(x.split(), query_word_idx), queries_preprocessed))
+
     np.save('data/all_keywords_keys.npy', queries_preprocessed, allow_pickle=True)
     pkl.dump(mask, open('data/mask_queries.pkl', 'wb'))
     if query_enc is not None:
@@ -282,6 +329,71 @@ def iterate_encoding_minibatches(inputs, batchsize, device):
         yield context, clen, query_repr
 
 
+def get_vectors(x):
+    mean_vec = np.zeros(300)
+    i = 0
+    for word in x:
+        mean_vec += np.array(fasttext[word])
+        i += 1
+    if i != 0:
+        mean_vec = mean_vec / i
+
+    rand_words = x[:4]
+
+    vectors = np.zeros(300 * 4)
+
+    for i, word in enumerate(rand_words):
+        vec = fasttext[word]
+        vectors[i * 300: (i + 1) * 300] = vec
+
+    return np.concatenate([mean_vec, vectors])
+
+
+def get_mean_name_vec(x):
+    mean_vec = np.zeros(300)
+    i = 0
+    for word in x:
+        mean_vec += np.array(fasttext[word])
+        i += 1
+    if i != 0:
+        mean_vec = mean_vec / i
+    return mean_vec
+
+
+def process_new_input(name, sem_kernel, category):
+    """Process new input with semantic kernel
+    
+    name: str, name of an app
+    sem_kernel: str, semantic kernel for app with comma separation
+    category: str, category from train set
+    fasttext: gensim model for vectorization
+    
+    return vector with shape (1864,)
+    """
+
+    with open('data/category_ind_dict.pickle', 'rb') as f:
+        category_ind_dict = pkl.load(f)
+    
+    if category not in category_ind_dict:
+        return 'category is not presented'
+    kernel_preprocessed = text2canonicals(sem_kernel)
+    name_preprocessed = text2canonicals(name)
+    
+    
+    name_vec = get_mean_name_vec(name_preprocessed)
+    vecs = get_vectors(kernel_preprocessed)
+
+    dummies = np.zeros(len(category_ind_dict))
+    dummies[category_ind_dict[category]] = 1
+    
+    res_vec = np.zeros(name_vec.shape[0] + vecs.shape[0] + dummies.shape[0])
+    res_vec[0:name_vec.shape[0]] = name_vec
+    res_vec[name_vec.shape[0]:name_vec.shape[0] + vecs.shape[0]] = vecs
+    res_vec[-dummies.shape[0]:] = dummies
+
+    return res_vec
+
+
 def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True):
     vector_dict = pkl.load(open('data/vectors_dict.pkl', 'rb'))
     if shuffle:
@@ -302,7 +414,9 @@ def iterate_minibatches(inputs, batchsize, device, shuffle=False, train=True):
         else:
             context, q_pos = zip(*batch)
         # calculate lengths which will be used in rnn
-        context = np.array([vector_dict[x] for x in context])
+
+        if train:
+            context = np.array([vector_dict[x] for x in context])
         qposlen = torch.tensor(list(map(len, q_pos)), dtype=torch.int32, device=device)
         context = torch.tensor(context, dtype=torch.float32, device=device)
         q_pos = torch.tensor(pad_sequence(q_pos), dtype=torch.long, device=device)

@@ -10,6 +10,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import pandas as pd
+import os
 
 
 # define our loss
@@ -31,9 +32,7 @@ def train(net, query_enc, train_data, test_data, device, args):
 
         for sample in generator:
             # parse the sample
-
             context, q_pos, qposlen, q_neg, qneglen = sample
-
             # zero gradients
             optimizer.zero_grad()
             query_pos_repr = query_enc(q_pos, qposlen)
@@ -56,14 +55,17 @@ def train(net, query_enc, train_data, test_data, device, args):
 
             if i % args.val_interval == args.val_interval - 1:
                 test(net, query_enc, test_data, args.test_batch_size, device, args.shuffle)
-                net.train()
+
             i += 1
 
         # save model each args.save_each epochs
         if args.save_model and epoch % args.save_each == args.save_each - 1:
-            path = 'weights/new_params_wval_{}.pt'.format(epoch)
-            save_model(net.state_dict(), path)
-            print('Model saved in {}'.format(path))
+            os.mkdir('weights/params_{}'.format(epoch))
+            path_net = 'weights/params_{}/net.pt'.format(epoch)
+            path_query_enc = 'weights/params_{}/query_enc.pt'.format(epoch)
+            save_model(net.state_dict(), path_net)
+            save_model(query_enc.state_dict(), path_query_enc)
+            print('Model saved in {} folder'.format('./weights/'))
 
     print('Finished Training')
 
@@ -116,13 +118,12 @@ def predict(net, query_enc, kernel, device, name='Переводчик', categor
 
     if not match:
         # update data/all_keywords_keys.npy
-        update_queries()#query_enc, device)
+        update_queries(query_enc, device)
         # rewrite new hash
         with open('data/queries_md5hash', 'w', encoding='utf-8') as f:
             f.write(md5hash)
 
     # load preprocessed bank of queries
-    #all_queries_encodings = np.load('data/queries_encodings.npy', allow_pickle=True)
     all_queries = np.load('data/all_keywords_keys.npy', allow_pickle=True)
     # make pairs (text, query_tensor) to feed to the network
     data4prediction = make_pairs4prediction(kernel_vector, all_queries)
@@ -131,6 +132,7 @@ def predict(net, query_enc, kernel, device, name='Переводчик', categor
     predictions = []
     # set model in evaluation mode
     net.eval()
+    query_enc.eval()
     # make predictions
     print('Making predictions...')
     for sample in generator:
@@ -182,7 +184,7 @@ def main():
     parser.add_argument('--shuffle', default=True,
                         help='shuffle batches while training (default True)')
 
-    parser.add_argument('--nneg-samples', type=int, default=50,
+    parser.add_argument('--nneg-samples', type=int, default=10,
                         help='number of negative samples for one positive (default 10)')
 
     parser.add_argument('--gpu', type=int, default=0, metavar='N',
@@ -225,7 +227,7 @@ def main():
     # load from checkpoint
     if args.load_model:
         print('Loading model...')
-        net = load_model(net, args.checkpoint_path, device)
+        net, query_enc = load_model(net, query_enc, args.checkpoint_path, device)
         is_trained = True
 
     # send it to gpu
@@ -272,7 +274,7 @@ def main():
             test(net, test_data, args.test_batch_size, device, portion=len(test_data))
 
     if args.make_prediction:
-#        assert is_trained, 'Model have to be trained or loaded before making predictions'
+        assert is_trained, 'Model have to be trained or loaded before making predictions'
         df = pd.read_csv('data/apps.csv').head(2)
         df['Keywords'] = df['Keywords'].apply(lambda x: str(x).replace('|', ','))
         kernels = df['kernel'].values

@@ -9,9 +9,9 @@ class SiameseNetwork(nn.Module):
         self.query_encoder = query_encoder
 
         # siamese network layers
-        self.dropout = nn.Dropout(0.5)
-        self.linear_1 = nn.Linear(context_dim + query_dim, 1024)
-        self.linear_2 = nn.Linear(1024, 1)
+        self.dropout = nn.Dropout(0.7)
+        self.linear_1 = nn.Linear(context_dim + query_dim, 512)
+        self.linear_2 = nn.Linear(512, 1)
         self.relu = nn.LeakyReLU()
 
     def forward(self, context, clens, query_pos, qposlens, query_neg=None, qneglens=None, train=True):

@@ -187,7 +187,7 @@ def get_queries_vocab(queries):
 
 
 def text_to_idx(text, word_idx):
-    return list(map(lambda x: word_idx.get(x) if word_idx.get(x) is not None else 0,text))
+    return list(map(lambda x: word_idx.get(x) if word_idx.get(x) is not None else 0, text))
 
 
 def filter_zero_length(data, name='train', train=True, verbose=True):
@@ -287,9 +287,7 @@ def update_queries(query_enc=None, device=None):
         calculate_queries_encodings(query_enc, device, queries_preprocessed)
 
 
-def calculate_queries_encodings(model, device, queries, batch_size=256):
-    _, query_word_idx = pkl.load(open('data/word_idx_dicts.pkl', 'rb'))
-    all_queries = list(map(lambda x: text_to_idx(x.split(), query_word_idx), queries))
+def calculate_queries_encodings(model, device, all_queries, batch_size=1):
 
     queries_encodings = []
     for start_idx in range(0, len(all_queries) - batch_size + 1, batch_size):
@@ -300,9 +298,10 @@ def calculate_queries_encodings(model, device, queries, batch_size=256):
         queries_repr = model(queries_tensor, queries_len)
         queries_repr = queries_repr.detach().cpu()
         queries_encodings.append(queries_repr)
-    queries_encodings = np.array([x for btch in queries_encodings for x in btch])
+
+    queries_encodings = [x for btch in queries_encodings for x in btch]
     # save tensors for queries
-    np.save('data/queries_encodings.npy', queries_encodings, allow_pickle=True)
+    pkl.dump(queries_encodings, open('data/queries_encodings.pkl', 'wb'))
 
 
 def pad_sequence(array):
@@ -325,7 +324,7 @@ def iterate_encoding_minibatches(inputs, batchsize, device):
         query_repr = torch.stack(query_repr)
         query_repr = query_repr.to(device)
         clen = torch.tensor(list(map(len, context)), dtype=torch.int32, device=device)
-        context = torch.tensor(pad_sequence(context), dtype=torch.long, device=device)
+        context = torch.tensor(context, dtype=torch.float32, device=device)
         yield context, clen, query_repr
 
 
@@ -378,8 +377,7 @@ def process_new_input(name, sem_kernel, category):
         return 'category is not presented'
     kernel_preprocessed = text2canonicals(sem_kernel)
     name_preprocessed = text2canonicals(name)
-    
-    
+
     name_vec = get_mean_name_vec(name_preprocessed)
     vecs = get_vectors(kernel_preprocessed)
 
@@ -433,7 +431,12 @@ def save_model(state_dict, path):
     torch.save(state_dict, path)
 
 
-def load_model(model, path, device):
-    checkpoint = torch.load(path,  map_location=device)
-    model.load_state_dict(checkpoint)
-    return model
+def load_model(model, query_enc, path, device):
+    path_to_net = path + '/net.pt'
+    path_to_enc = path + '/query_enc.pt'
+    checkpoint_net = torch.load(path_to_net,  map_location=device)
+    model.load_state_dict(checkpoint_net)
+
+    checkpoint_enc = torch.load(path_to_enc, map_location=device)
+    query_enc.load_state_dict(checkpoint_enc)
+    return model, query_enc

@@ -106,13 +106,10 @@ def test(net, query_enc, test_data, batch_size, device, shuffle=False, portion=N
 
 
 def predict(net, query_enc, kernel, device, name='Переводчик', category='Инструменты', batch_size=512, top_n=300):
-    mask = pkl.load(open('data/mask_queries.pkl', 'rb'))
     with open('bank_queries.txt', 'r', encoding='utf-8') as f:
         # load all queries in memory
         bank_queries = list(map(lambda x: x.strip('\n'), f.readlines()))
-        bank_queries = [bank_queries[x] for x in mask]
-    # preprocess description
-    kernel_vector = process_new_input(name, kernel, category)
+
     # check that bank of queries is[2, 8], [2,  not changed
     match, md5hash = checksum_match()
 
@@ -123,6 +120,10 @@ def predict(net, query_enc, kernel, device, name='Переводчик', categor
         with open('data/queries_md5hash', 'w', encoding='utf-8') as f:
             f.write(md5hash)
 
+    # preprocess description
+    kernel_vector = process_new_input(name, kernel, category)
+    mask = pkl.load(open('data/mask_queries.pkl', 'rb'))
+    bank_queries = [bank_queries[x] for x in mask]
     # load preprocessed bank of queries
     all_queries = np.load('data/all_keywords_keys.npy', allow_pickle=True)
     # make pairs (text, query_tensor) to feed to the network

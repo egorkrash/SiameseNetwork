@@ -2,5 +2,5 @@ tqdm==4.11.2
 pymorphy2==0.8
 torch==1.2.0
 numpy==1.11.3
-joblib==0.13.2
+joblib==1.2.0
 scikit_learn==0.21.3
